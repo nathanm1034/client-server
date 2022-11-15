@@ -1,6 +1,9 @@
 #ifndef _TCPRequestChannel_H_
 #define _TCPRequestChannel_H_
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include "common.h"
 
 

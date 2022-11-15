@@ -9,7 +9,7 @@
 #include "common.h"
 #include "Histogram.h"
 #include "HistogramCollection.h"
-#include "FIFORequestChannel.h"
+#include "TCPRequestChannel.h"
 
 // ecgno to use for datamsgs
 #define EGCNO 1
@@ -27,7 +27,7 @@ void patient_thread_function (int p_no, int n, BoundedBuffer* request_buffer) {
 }
 
 // functionality of the file thread
-void file_thread_function (int m, string f, FIFORequestChannel* chan, BoundedBuffer* request_buffer) {
+void file_thread_function (int m, string f, TCPRequestChannel* chan, BoundedBuffer* request_buffer) {
     //gathering the file size
     filemsg fm(0,0);
     string output_file = "received/"+f;
@@ -62,7 +62,7 @@ void file_thread_function (int m, string f, FIFORequestChannel* chan, BoundedBuf
 }
 
 // functionality of the worker threads
-void worker_thread_function (int _m, string f, FIFORequestChannel* worker_chan, BoundedBuffer* request_buffer, BoundedBuffer* response_buffer) {
+void worker_thread_function (int _m, string f, TCPRequestChannel* worker_chan, BoundedBuffer* request_buffer, BoundedBuffer* response_buffer) {
     char buf[MAX_MESSAGE];
     double data_response;
 
@@ -125,10 +125,12 @@ int main (int argc, char* argv[]) {
     int b = 20;		// default capacity of the request buffer (should be changed)
 	int m = MAX_MESSAGE;	// default capacity of the message buffer
 	string f = "";	// name of file to be transferred
+    string host;
+    string port;
     
     // read arguments
     int opt;
-	while ((opt = getopt(argc, argv, "n:p:w:h:b:m:f:")) != -1) {
+	while ((opt = getopt(argc, argv, "n:p:w:h:b:m:f:a:r:")) != -1) {
 		switch (opt) {
 			case 'n':
 				n = atoi(optarg);
@@ -151,17 +153,23 @@ int main (int argc, char* argv[]) {
 			case 'f':
 				f = optarg;
                 break;
+            case 'a':
+                host = optarg;
+                break;
+            case 'r':
+                port = optarg;
+                break;
 		}
 	}
     
 	// fork and exec the server
-    int pid = fork();
-    if (pid == 0) {
-        execl("./server", "./server", "-m", (char*) to_string(m).c_str(), nullptr);
-    }
+    // int pid = fork();
+    // if (pid == 0) {
+    //     execl("./server", "./server", "-m", (char*) to_string(m).c_str(), nullptr);
+    // }
     
 	// initialize overhead (including the control channel)
-	FIFORequestChannel* chan = new FIFORequestChannel("control", FIFORequestChannel::CLIENT_SIDE);
+	TCPRequestChannel* chan = new TCPRequestChannel(host, port);
     BoundedBuffer request_buffer(b);
     BoundedBuffer response_buffer(b);
 	HistogramCollection hc;
@@ -170,7 +178,7 @@ int main (int argc, char* argv[]) {
     vector<thread> producer_threads; 
     vector<thread> worker_threads;
     vector<thread> histogram_threads;
-    vector<FIFORequestChannel*> worker_chans;
+    vector<TCPRequestChannel*> worker_chans;
 
     // making histograms and adding to collection
     for (int i = 0; i < p; i++) {
@@ -184,12 +192,14 @@ int main (int argc, char* argv[]) {
 
     /* create all threads here */
     for (int i = 0; i < w; i++) { //creating w worker threads and channels
-        MESSAGE_TYPE new_chan = NEWCHANNEL_MSG;
-        char buf[MAX_MESSAGE];
-        chan->cwrite(&new_chan, sizeof(MESSAGE_TYPE));
-        chan->cread(buf, sizeof(datamsg));
-        string channel_name(buf);
-        worker_chans.push_back(new FIFORequestChannel(channel_name, FIFORequestChannel::CLIENT_SIDE));
+        // MESSAGE_TYPE new_chan = NEWCHANNEL_MSG;
+        // char buf[MAX_MESSAGE];
+        // chan->cwrite(&new_chan, sizeof(MESSAGE_TYPE));
+        // chan->cread(buf, sizeof(datamsg));
+        // string channel_name(buf);
+        // worker_chans.push_back(new FIFORequestChannel(channel_name, FIFORequestChannel::CLIENT_SIDE));
+        TCPRequestChannel* new_channel = new TCPRequestChannel(host, port);
+        worker_chans.push_back(new_channel);
         worker_threads.push_back(thread(worker_thread_function, m, f, worker_chans[i], &request_buffer, &response_buffer));
     }
 
